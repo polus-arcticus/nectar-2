@@ -10,3 +10,9 @@
 [submodule "lib/uniswap-hooks"]
 	path = lib/uniswap-hooks
 	url = https://github.com/openzeppelin/uniswap-hooks
+[submodule "lib/alkahest-mocks"]
+	path = lib/alkahest-mocks
+	url = https://github.com/CoopHive/alkahest-mocks
+[submodule "lib/eas-contracts"]
+	path = lib/eas-contracts
+	url = https://github.com/ethereum-attestation-service/eas-contracts

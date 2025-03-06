@@ -14,7 +14,7 @@ import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {Constants} from "v4-core/src/../test/utils/Constants.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
-import {Counter} from "../src/Counter.sol";
+import {Nectar, ComputeNode} from "../src/Nectar.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol";
 import {PositionManager} from "v4-periphery/src/PositionManager.sol";
@@ -26,8 +26,12 @@ import {IPositionDescriptor} from "v4-periphery/src/interfaces/IPositionDescript
 import {IWETH9} from "v4-periphery/src/interfaces/external/IWETH9.sol";
 
 /// @notice Forge script for deploying v4 & hooks to **anvil**
-contract CounterScript is Script, DeployPermit2 {
+contract NectarScript is Script, DeployPermit2 {
     using EasyPosm for IPositionManager;
+    address eas = 0xA1207F3BBa224E2c9c3c6D5aF63D0eb1582Ce587;
+    address schemaRegistry = 0xA7b39296258348C78294F95B872b282326A97BDF;
+    address resolver = makeAddr("resolver");
+    address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
     address constant CREATE2_DEPLOYER = address(0x4e59b44847b379578588920cA78FbF26c0B4956C);
     IPoolManager manager;
@@ -44,19 +48,29 @@ contract CounterScript is Script, DeployPermit2 {
         // hook contracts must have specific flags encoded in the address
         uint160 permissions = uint160(
             Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG
-                | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
+            | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG | Hooks.BEFORE_DONATE_FLAG | Hooks.AFTER_DONATE_FLAG
         );
 
         // Mine a salt that will produce a hook address with the correct permissions
         (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, permissions, type(Counter).creationCode, abi.encode(address(manager)));
+            HookMiner.find(CREATE2_DEPLOYER, permissions, type(Nectar).creationCode, abi.encode(address(manager)));
 
         // ----------------------------- //
         // Deploy the hook using CREATE2 //
         // ----------------------------- //
         vm.broadcast();
-        Counter counter = new Counter{salt: salt}(manager);
-        require(address(counter) == hookAddress, "CounterScript: hook address mismatch");
+
+        ComputeNode memory computeNode = ComputeNode({
+            resolver: resolver,
+            resolverURL: "https://compute.node.com",
+            containerName: "cowsay:latest",
+            payoutCurrency: usdc,
+            payoutAmount: 10*10**18,
+            lastRun: 0,
+            downTime: 3600 * 24 * 7 // 1 week
+        });
+        Nectar nectar = new Nectar{salt: salt}(manager, eas, schemaRegistry, computeNode);
+        require(address(nectar) == hookAddress, "NectarScript: hook address mismatch");
 
         // Additional helpers for interacting with the pool
         vm.startBroadcast();
@@ -66,7 +80,7 @@ contract CounterScript is Script, DeployPermit2 {
 
         // test the lifecycle (create pool, add liquidity, swap)
         vm.startBroadcast();
-        testLifecycle(address(counter));
+        testLifecycle(address(nectar));
         vm.stopBroadcast();
     }
 
